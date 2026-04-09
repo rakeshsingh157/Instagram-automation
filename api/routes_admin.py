@@ -10,9 +10,8 @@ from core.config import settings
 import os
 router = APIRouter()
 
-# Get absolute path to the templates directory
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+# Simple relative path initialization - Starlette handles the rest
+templates = Jinja2Templates(directory="templates")
 
 def get_cookie_user(request: Request):
     token = request.cookies.get("access_token")

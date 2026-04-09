@@ -56,10 +56,16 @@ from fastapi.responses import JSONResponse
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     import traceback
-    error_msg = f"Application Error: {str(exc)}\n{traceback.format_exc()}"
-    print(error_msg) # This will show up in Render Logs
+    # Detailed log for Render Console
+    print(f"ERROR OCCURRED: {type(exc).__name__}: {str(exc)}")
+    traceback.print_exc() 
+    
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal Server Error", "detail": str(exc)}
+        content={
+            "message": "Internal Server Error",
+            "error_type": type(exc).__name__,
+            "detail": str(exc)
+        }
     )
 

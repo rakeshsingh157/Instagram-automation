@@ -7,8 +7,12 @@ from models.models import BotSettings, PostHistory
 from core.security import verify_token, create_access_token
 from core.config import settings
 
+import os
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+
+# Get absolute path to the templates directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 def get_cookie_user(request: Request):
     token = request.cookies.get("access_token")

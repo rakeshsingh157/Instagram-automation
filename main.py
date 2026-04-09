@@ -10,8 +10,13 @@ from api.routes_webhook import router as webhook_router
 from services.scheduler import start_scheduler
 import os
 
-# Create DB tables
-Base.metadata.create_all(bind=engine)
+# Create DB tables safely
+try:
+    Base.metadata.create_all(bind=engine)
+    print("Database tables initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL DB ERROR: {e}")
+    # We continue so the server at least starts and can show the error via /ping or logs
 
 # Ensure static directories exist
 os.makedirs("generated_content", exist_ok=True)
@@ -44,4 +49,17 @@ async def startup_event():
 @app.get("/ping")
 async def ping():
     return {"status": "alive"}
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    error_msg = f"Application Error: {str(exc)}\n{traceback.format_exc()}"
+    print(error_msg) # This will show up in Render Logs
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "detail": str(exc)}
+    )
 

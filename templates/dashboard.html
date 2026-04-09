@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Instagram Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .nav-pills .nav-link.active {
+            background-color: #6f42c1;
+        }
+        .nav-pills .nav-link {
+            color: #6f42c1;
+        }
+        .stat-card {
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+        .stat-card h2 { margin: 0; font-size: 2rem; font-weight: 700; }
+        .stat-card small { opacity: 0.85; }
+        .badge-replied { background-color: #198754; }
+        .badge-skipped { background-color: #6c757d; }
+        .badge-error { background-color: #dc3545; }
+        .badge-failed { background-color: #fd7e14; }
+    </style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">IG Automation</a>
+    <div class="d-flex">
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4">
+    <!-- Tab Navigation -->
+    <ul class="nav nav-pills mb-4" id="dashboardTabs">
+        <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="pill" href="#tab-posting">📸 Content Posting</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="pill" href="#tab-comments">💬 Comment Replies</a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- ═══════════════ TAB 1: Content Posting ═══════════════ -->
+        <div class="tab-pane fade show active" id="tab-posting">
+            <div class="row">
+                <!-- Settings -->
+                <div class="col-md-5">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-primary text-white">Bot Configuration</div>
+                        <div class="card-body">
+                            <form id="configForm">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="isActive" {% if config and config.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="isActive">Bot Active (Main Feed Schedule)</label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="storyAutomation" {% if config and config.story_automation %}checked{% endif %}>
+                                    <label class="form-check-label" for="storyAutomation">Story Automation (Natively push to Story)</label>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Image Prompt</label>
+                                    <textarea class="form-control" id="imagePrompt" rows="3">{{ config.image_prompt if config else '' }}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Negative Prompt</label>
+                                    <input type="text" class="form-control" id="negativePrompt" value="{{ config.negative_prompt if config else '' }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label>Interval (Hours)</label>
+                                    <input type="number" class="form-control" id="interval" value="{{ config.run_interval_hours if config else 24 }}">
+                                </div>
+                                <button type="button" class="btn btn-success" onclick="saveSettings()">Save Settings</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-warning text-dark">Instant Manual Triggers</div>
+                        <div class="card-body">
+                            <p class="text-muted small">Instantly wake up the AI and force it to construct specific posts completely out of schedule.</p>
+                            
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-dark" onclick="triggerEndpoint('/api/v1/trigger/feed/image')">📸 Force AI Image to Feed</button>
+                                <button class="btn btn-outline-dark" onclick="triggerEndpoint('/api/v1/trigger/feed/video')">🎬 Force AI Reel to Feed</button>
+                                <button class="btn btn-outline-dark" onclick="triggerEndpoint('/api/v1/trigger/story/image')">🖼️ Force AI Image to Story</button>
+                                <button class="btn btn-outline-dark" onclick="triggerEndpoint('/api/v1/trigger/story/video')">🎞️ Force AI Reel to Story</button>
+                                <button class="btn btn-outline-dark" onclick="triggerEndpoint('/api/v1/trigger/comments')">💬 Force AI Comment Scan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="col-md-7">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-secondary text-white">Recent Activity</div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Status</th>
+                                            <th>Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for log in logs %}
+                                        <tr>
+                                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                            <td>
+                                                {% if log.status == 'Success' %}
+                                                <span class="badge bg-success">Success</span>
+                                                {% else %}
+                                                <span class="badge bg-danger">Failed</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if log.ig_post_id %} <a href="https://instagram.com/p/{{ log.ig_post_id }}" target="_blank">View Post</a><br> {% endif %}
+                                                {% if log.error_log %} <small class="text-danger">{{ log.error_log[:50] }}...</small> {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="3" class="text-center">No logs found.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════ TAB 2: Comment Replies ═══════════════ -->
+        <div class="tab-pane fade" id="tab-comments">
+
+            <!-- Stats Row -->
+            <div class="row mb-4" id="commentStats">
+                <div class="col-md-3">
+                    <div class="stat-card bg-success shadow-sm">
+                        <h2 id="statRepliesToday">—</h2>
+                        <small>Replies Today</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card bg-secondary shadow-sm">
+                        <h2 id="statSkippedToday">—</h2>
+                        <small>Skipped Today</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card bg-danger shadow-sm">
+                        <h2 id="statErrorsToday">—</h2>
+                        <small>Errors Today</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card bg-primary shadow-sm">
+                        <h2 id="statTotalReplies">—</h2>
+                        <small>Total All Time</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Comment Reply Settings -->
+                <div class="col-md-5">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-purple text-white" style="background-color: #6f42c1;">
+                            💬 Comment Reply Configuration
+                        </div>
+                        <div class="card-body">
+                            <form id="commentConfigForm">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="crIsActive">
+                                    <label class="form-check-label" for="crIsActive">Auto-Reply Active</label>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Max Replies Per Day</label>
+                                    <input type="number" class="form-control" id="crMaxReplies" value="15" min="1" max="50">
+                                    <small class="form-text text-muted">Recommended: 10–20 for safe engagement</small>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <label>Min Delay (sec)</label>
+                                        <input type="number" class="form-control" id="crMinDelay" value="10" min="5">
+                                    </div>
+                                    <div class="col-6">
+                                        <label>Max Delay (sec)</label>
+                                        <input type="number" class="form-control" id="crMaxDelay" value="30" min="10">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Monitor Recent Posts</label>
+                                    <input type="number" class="form-control" id="crRecentPosts" value="5" min="1" max="25">
+                                    <small class="form-text text-muted">How many of your latest posts to scan for comments</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Reply Style / Tone</label>
+                                    <textarea class="form-control" id="crReplyStyle" rows="2">friendly, casual influencer — short, warm, and engaging</textarea>
+                                </div>
+                                <button type="button" class="btn btn-success" onclick="saveCommentSettings()">💾 Save Settings</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-warning">Manual Actions</div>
+                        <div class="card-body text-center">
+                            <button class="btn btn-outline-primary w-100 mb-2" onclick="triggerCommentReply()" id="triggerBtn">
+                                💬 Run Comment Reply Now
+                            </button>
+                            <small class="text-muted d-block">Scans recent posts and replies to eligible comments.</small>
+                            <div class="mt-2 text-muted" id="dailyLimitLabel"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reply History & Logs -->
+                <div class="col-md-7">
+                    <!-- Sub-tabs for History / Logs -->
+                    <ul class="nav nav-tabs mb-0" id="commentSubTabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#subtab-history">📋 Reply History</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#subtab-logs">📝 Action Logs</a>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <!-- Reply History -->
+                        <div class="tab-pane fade show active" id="subtab-history">
+                            <div class="card shadow-sm border-top-0" style="border-top-left-radius:0; border-top-right-radius:0;">
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                        <table class="table table-hover table-sm mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>User</th>
+                                                    <th>Comment</th>
+                                                    <th>Our Reply</th>
+                                                    <th>Status</th>
+                                                    <th>Time</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="replyHistoryBody">
+                                                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Logs -->
+                        <div class="tab-pane fade" id="subtab-logs">
+                            <div class="card shadow-sm border-top-0" style="border-top-left-radius:0; border-top-right-radius:0;">
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                        <table class="table table-hover table-sm mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>Action</th>
+                                                    <th>Details</th>
+                                                    <th>Time</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="actionLogsBody">
+                                                <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab-content -->
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function authHeaders() {
+        const token = getCookie("access_token");
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    }
+
+    // ══════════ Content Posting Tab ══════════
+
+    async function saveSettings() {
+        const payload = {
+            is_active: document.getElementById('isActive').checked,
+            image_prompt: document.getElementById('imagePrompt').value,
+            negative_prompt: document.getElementById('negativePrompt').value,
+            run_interval_hours: parseInt(document.getElementById('interval').value),
+            story_automation: document.getElementById('storyAutomation').checked
+        };
+
+        const res = await fetch('/api/v1/settings', {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert('Settings saved!');
+        } else {
+            alert('Failed to save settings.');
+        }
+    }
+
+    async function triggerEndpoint(endpointUrl) {
+        const res = await fetch(endpointUrl, {
+            method: 'GET'
+        });
+        
+        if (res.ok) {
+            alert('Triggered successfully! The AI pipeline is running in the background. Check logs in a minute.');
+        } else {
+            alert('Failed to trigger endpoint.');
+        }
+    }
+
+    // ══════════ Comment Replies Tab ══════════
+
+    async function loadCommentSettings() {
+        try {
+            const res = await fetch('/api/v1/comments/settings', { headers: authHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('crIsActive').checked = data.is_active;
+                document.getElementById('crMaxReplies').value = data.max_replies_per_day;
+                document.getElementById('crMinDelay').value = data.min_delay_seconds;
+                document.getElementById('crMaxDelay').value = data.max_delay_seconds;
+                document.getElementById('crRecentPosts').value = data.monitor_recent_posts;
+                document.getElementById('crReplyStyle').value = data.reply_style;
+            }
+        } catch (e) { console.error('Failed to load comment settings:', e); }
+    }
+
+    async function saveCommentSettings() {
+        const payload = {
+            is_active: document.getElementById('crIsActive').checked,
+            max_replies_per_day: parseInt(document.getElementById('crMaxReplies').value),
+            min_delay_seconds: parseInt(document.getElementById('crMinDelay').value),
+            max_delay_seconds: parseInt(document.getElementById('crMaxDelay').value),
+            monitor_recent_posts: parseInt(document.getElementById('crRecentPosts').value),
+            reply_style: document.getElementById('crReplyStyle').value,
+        };
+
+        const res = await fetch('/api/v1/comments/settings', {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert('Comment reply settings saved!');
+        } else {
+            alert('Failed to save comment reply settings.');
+        }
+    }
+
+    async function triggerCommentReply() {
+        const btn = document.getElementById('triggerBtn');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Running...';
+
+        const res = await fetch('/api/v1/comments/trigger', {
+            method: 'POST',
+            headers: authHeaders()
+        });
+
+        if (res.ok) {
+            alert('Comment reply pipeline started in background! Check back in a few minutes.');
+        } else {
+            alert('Failed to trigger comment replies.');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '💬 Run Comment Reply Now';
+    }
+
+    async function loadCommentStats() {
+        try {
+            const res = await fetch('/api/v1/comments/stats', { headers: authHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('statRepliesToday').textContent = data.replies_today;
+                document.getElementById('statSkippedToday').textContent = data.skipped_today;
+                document.getElementById('statErrorsToday').textContent = data.errors_today;
+                document.getElementById('statTotalReplies').textContent = data.total_replies;
+                document.getElementById('dailyLimitLabel').textContent =
+                    `Daily limit: ${data.replies_today}/${data.daily_limit}`;
+            }
+        } catch (e) { console.error('Failed to load comment stats:', e); }
+    }
+
+    async function loadReplyHistory() {
+        try {
+            const res = await fetch('/api/v1/comments/history?limit=50', { headers: authHeaders() });
+            if (!res.ok) return;
+            const data = await res.json();
+            const tbody = document.getElementById('replyHistoryBody');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No replies yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(r => {
+                const statusClass = r.status === 'replied' ? 'badge-replied' :
+                                    r.status === 'skipped' ? 'badge-skipped' :
+                                    'badge-failed';
+                const time = new Date(r.replied_at).toLocaleString();
+                return `<tr>
+                    <td><small>@${r.comment_username || '—'}</small></td>
+                    <td><small>${(r.comment_text || '').substring(0, 60)}${(r.comment_text || '').length > 60 ? '...' : ''}</small></td>
+                    <td><small>${(r.reply_text || '—').substring(0, 60)}${(r.reply_text || '').length > 60 ? '...' : ''}</small></td>
+                    <td><span class="badge ${statusClass}">${r.status}</span></td>
+                    <td><small>${time}</small></td>
+                </tr>`;
+            }).join('');
+        } catch (e) { console.error('Failed to load reply history:', e); }
+    }
+
+    async function loadActionLogs() {
+        try {
+            const res = await fetch('/api/v1/comments/logs?limit=100', { headers: authHeaders() });
+            if (!res.ok) return;
+            const data = await res.json();
+            const tbody = document.getElementById('actionLogsBody');
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No logs yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(l => {
+                const actionColor = l.action === 'replied' ? 'success' :
+                                    l.action === 'error' ? 'danger' :
+                                    'secondary';
+                const time = new Date(l.timestamp).toLocaleString();
+                return `<tr>
+                    <td><span class="badge bg-${actionColor}">${l.action}</span></td>
+                    <td><small>${(l.details || '—').substring(0, 100)}</small></td>
+                    <td><small>${time}</small></td>
+                </tr>`;
+            }).join('');
+        } catch (e) { console.error('Failed to load action logs:', e); }
+    }
+
+    // Load comment tab data when switching to it
+    document.querySelector('a[href="#tab-comments"]').addEventListener('shown.bs.tab', function() {
+        loadCommentSettings();
+        loadCommentStats();
+        loadReplyHistory();
+        loadActionLogs();
+    });
+
+    // Also load on page load if tab is active (it won't be by default, but just in case)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Pre-load comment data so it's ready
+        loadCommentSettings();
+        loadCommentStats();
+        loadReplyHistory();
+        loadActionLogs();
+    });
+</script>
+</body>
+</html>

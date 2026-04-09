@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: instagram-automation-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: INSTAGRAM_PAGE_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: JSON2VIDEO_API_KEY
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: BOT_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: IMGBB_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.2

@@ -56,3 +56,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "dashboard.html", 
         {"request": request, "config": cfg, "logs": logs}
     )
+
+@router.get("/visualizer", response_class=HTMLResponse)
+async def visualizer_page(request: Request):
+    if not get_cookie_user(request):
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse("visualizer.html", {"request": request})

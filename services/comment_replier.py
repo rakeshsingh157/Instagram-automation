@@ -19,6 +19,7 @@ import time
 import traceback
 import logging
 from datetime import datetime, timezone, timedelta
+from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
 from core.database import SessionLocal
@@ -347,22 +348,28 @@ def run_comment_reply_pipeline(force: bool = False):
                         time.sleep(5)  # Short delay before retry
                 
                 if reply_id:
-                    # Save to DB
-                    record = RepliedComment(
-                        comment_id=comment_id,
-                        post_id=post_id,
-                        comment_text=comment_text[:500],
-                        comment_username=comment_username,
-                        reply_text=reply_text,
-                        reply_id=reply_id,
-                        status="replied",
-                    )
-                    db.add(record)
-                    db.commit()
-                    
-                    log_action(db, comment_id, post_id, "replied",
-                              f"Reply: '{reply_text[:100]}' | Reason: {fr.reason}")
-                    success_count += 1
+                    try:
+                        # Save to DB
+                        record = RepliedComment(
+                            comment_id=comment_id,
+                            post_id=post_id,
+                            comment_text=comment_text[:500],
+                            comment_username=comment_username,
+                            reply_text=reply_text,
+                            reply_id=reply_id,
+                            status="replied",
+                        )
+                        db.add(record)
+                        db.commit()
+                        
+                        log_action(db, comment_id, post_id, "replied",
+                                  f"Reply: '{reply_text[:100]}' | Reason: {fr.reason}")
+                        success_count += 1
+                    except IntegrityError:
+                        db.rollback()
+                        logger.warning(f"Duplicate detection for comment {comment_id} during commit. Skipping.")
+                        log_action(db, comment_id, post_id, "skipped_duplicate", "Detected during database commit")
+                        continue
                 else:
                     # All retries failed
                     record = RepliedComment(
@@ -390,9 +397,13 @@ def run_comment_reply_pipeline(force: bool = False):
                     time.sleep(delay)
                     
             except Exception as e:
-                error_msg = f"{str(e)}\n{traceback.format_exc()}"
+                db.rollback()  # Crucial: Reset session state after any failure
+                error_msg = str(e)
                 logger.error(f"Error processing comment {comment_id}: {error_msg}")
-                log_action(db, comment_id, post_id, "error", error_msg[:500])
+                try:
+                    log_action(db, comment_id, post_id, "error", error_msg[:500])
+                except:
+                    db.rollback()
                 error_count += 1
         
         logger.info(

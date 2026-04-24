@@ -68,29 +68,35 @@ Rules:
     db = SessionLocal()
     sender_username = get_instagram_username(sender_id)
     
-    # Initialize the messages list with system instructions
-    ai_messages = [
-        {"role": "system", "content": system_prompt + f"\nInfo: The person you are talking to is named '{sender_username}'."}
-    ]
-    
     try:
-        # Fetch RECENT 5 messages for memory
+        # Fetch RECENT 20 messages for memory (enough for long conversations)
         past_msgs = db.query(DMChatHistory).filter(
             DMChatHistory.sender_id == sender_id
-        ).order_by(DMChatHistory.timestamp.desc()).limit(5).all()
+        ).order_by(DMChatHistory.timestamp.desc()).limit(20).all()
         past_msgs.reverse()
         
-        for msg in past_msgs:
-            actual_role = "user" if msg.role == "user" else "assistant"
-            ai_messages.append({"role": actual_role, "content": msg.message_text})
-            
     finally:
         db.close()
+    
+    # Build context-aware system prompt
+    has_history = len(past_msgs) > 0
+    context_note = f"\nInfo: The person you are talking to is named '{sender_username}'."
+    if has_history:
+        context_note += "\nIMPORTANT: You are ALREADY in an ongoing conversation with this person. Do NOT greet them again or re-introduce yourself. Just continue the conversation naturally from where you left off."
+    
+    # Initialize the messages list with system instructions
+    ai_messages = [
+        {"role": "system", "content": system_prompt + context_note}
+    ]
+    
+    for msg in past_msgs:
+        actual_role = "user" if msg.role == "user" else "assistant"
+        ai_messages.append({"role": actual_role, "content": msg.message_text})
 
     # Add the current new message 
     ai_messages.append({"role": "user", "content": new_message})
 
-    logger.info(f"Generating native chat reply for user: {sender_username} (Total msgs in context: {len(ai_messages)})")
+    logger.info(f"Generating native chat reply for user: {sender_username} (Total msgs in context: {len(ai_messages)}, has_history: {has_history})")
 
     # 2. Call AI natively 
     ai_reply = _chat_with_free_ai(ai_messages)

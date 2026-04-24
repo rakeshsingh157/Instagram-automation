@@ -23,10 +23,6 @@ router = APIRouter()
 # Set it to anything you want, but keep it consistent with Meta Dashboard.
 WEBHOOK_VERIFY_TOKEN = "instagram_nature_bot_2026"
 
-# =============================================================================
-# ANTI-LOOP PROTECTION
-# =============================================================================
-# 1. Deduplication cache: tracks recently processed message IDs (max 500 entries)
 _processed_message_ids: OrderedDict = OrderedDict()
 _MAX_CACHE_SIZE = 500
 

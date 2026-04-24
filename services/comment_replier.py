@@ -65,7 +65,7 @@ def fetch_comments(media_id: str, limit: int = 100) -> list:
     """Fetch comments for a specific Instagram post."""
     url = f"{GRAPH_API_BASE}/{media_id}/comments"
     params = {
-        "fields": "id,text,timestamp,username,replies{id,text,username,timestamp}",
+        "fields": "id,text,timestamp,username,replies{id,text,username,timestamp,from{id,username}}",
         "limit": limit,
         "access_token": settings.INSTAGRAM_ACCESS_TOKEN,
     }
@@ -123,14 +123,29 @@ def is_already_replied(db, comment_id: str) -> bool:
 
 def has_bot_reply_in_api(comment_data: dict) -> bool:
     """
-    Check if the comment already has a reply from us by inspecting
+    Check if the comment already has a reply from OUR bot by inspecting
     the replies sub-field from the API response.
-    This is an extra safety check beyond the DB.
+    Only matches if a reply's username matches our page — does NOT skip
+    comments just because other users replied.
     """
     replies = comment_data.get("replies", {}).get("data", [])
-    # We can't easily know our own username from the API,
-    # so this is a supplementary check — the DB is the primary source of truth.
-    return len(replies) > 0
+    if not replies:
+        return False
+    
+    # Try to match against our page ID or known bot identity
+    # We check if any reply was posted by our own Instagram page
+    our_page_id = str(settings.INSTAGRAM_PAGE_ID)
+    
+    for reply in replies:
+        reply_username = reply.get("username", "")
+        reply_from = reply.get("from", {}).get("id", "")
+        
+        # Match by user ID if available
+        if reply_from and str(reply_from) == our_page_id:
+            return True
+    
+    # No reply from our bot found — other users replying is fine
+    return False
 
 
 def get_replies_today_count(db) -> int:
@@ -242,19 +257,10 @@ def run_comment_reply_pipeline(force: bool = False):
                     continue
                 
                 # Optional: check API replies as extra safety
+                # Only skip if OUR bot has already replied (not other users)
                 if has_bot_reply_in_api(comment):
                     log_action(db, comment_id, post_id, "skipped_duplicate", 
-                              "Already has replies (API check)")
-                    # Also save to DB so we don't check again
-                    record = RepliedComment(
-                        comment_id=comment_id,
-                        post_id=post_id,
-                        comment_text=comment_text[:500],
-                        comment_username=comment_username,
-                        status="skipped",
-                    )
-                    db.add(record)
-                    db.commit()
+                              "Bot already replied (API check)")
                     continue
                 
                 # Run through filter

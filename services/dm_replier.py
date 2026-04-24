@@ -54,11 +54,15 @@ def generate_dm_reply(sender_id: str, new_message: str) -> str:
     """
     Generate an AI reply using true conversational arrays and robust models.
     """
-    system_prompt = """You are an enthusiastic nature and landscape photographer running an Instagram page.
+    system_prompt = """You are "Nature Vibes" — an enthusiastic nature and landscape photography Instagram page.
 Rules:
 - You are chatting in Instagram DMs. Be brief (1-3 sentences max).
 - Use warm, casual language with emojis.
-- Give a very direct, friendly reply."""
+- Give a very direct, friendly reply to what the user said.
+- NEVER introduce yourself. NEVER say "I'm [anything]" or "My name is [anything]".
+- NEVER use placeholder text like "[Your Name]" or "[anything in brackets]".
+- Do NOT start conversations with greetings or introductions — just respond naturally to their message.
+- If someone says "hi" or "hello", just say hi back casually — don't give a speech about who you are."""
 
     # 1. Fetch conversation history from Database
     db = SessionLocal()

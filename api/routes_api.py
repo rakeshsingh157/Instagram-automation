@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from core.database import get_db
+import threading
+import logging
+from core.database import get_db, SessionLocal
 from models.models import BotSettings, PostHistory
 from schemas.schemas import SettingsUpdate, SettingsResponse, PostHistoryResponse
 from core.security import get_current_user
 from services.scheduler import bot_pipeline_job, update_scheduler_interval
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # --- Config & Settings ---
@@ -49,59 +52,75 @@ def get_history(limit: int = 10, db: Session = Depends(get_db), _: bool = Depend
 
 # --- Manual Trigger (Dashboard Form) ---
 @router.post("/trigger")
-def manual_trigger(background_tasks: BackgroundTasks, _: bool = Depends(get_current_user)):
-    background_tasks.add_task(bot_pipeline_job, force=True)
+def manual_trigger(_: bool = Depends(get_current_user)):
+    thread = threading.Thread(target=bot_pipeline_job, kwargs={"force": True}, daemon=True)
+    thread.start()
     return {"message": "Pipeline started in the background."}
 
 # --- Independent Manual Triggers (Unauthenticated GET) ---
 @router.get("/trigger/feed/image")
-def trigger_feed_image(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trigger_feed_image():
     """Instantly posts an AI Image to the Feed (and story if enabled)."""
-    cfg = db.query(BotSettings).first()
     from services.scheduler import _post_image_pipeline
-    background_tasks.add_task(_post_image_pipeline, db, cfg)
+    def _run():
+        db = SessionLocal()
+        try:
+            cfg = db.query(BotSettings).first()
+            _post_image_pipeline(db, cfg)
+        except Exception as e:
+            logger.error(f"[Trigger] Feed Image failed: {e}")
+        finally:
+            db.close()
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
     return {"message": "AI Image -> Feed generation started."}
 
 @router.get("/trigger/feed/video")
-def trigger_feed_video(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trigger_feed_video():
     """Instantly posts an AI Reel to the Feed (and story if enabled)."""
     from services.scheduler import _post_reel_pipeline
-    background_tasks.add_task(_post_reel_pipeline, db)
+    def _run():
+        db = SessionLocal()
+        try:
+            _post_reel_pipeline(db)
+        except Exception as e:
+            logger.error(f"[Trigger] Feed Video failed: {e}")
+        finally:
+            db.close()
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
     return {"message": "AI Reel -> Feed generation started."}
 
 @router.get("/trigger/story/image")
-def trigger_story_image(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trigger_story_image():
     """Instantly posts an AI Image ONLY to the Story (bypassing Feed completely)."""
-    cfg = db.query(BotSettings).first()
-    def _only_story_image(db, cfg):
+    def _run():
         from services.ai_generator import generate_image
         from services.captioner import generate_image_prompt
         from services.cloudinary_service import upload_image_to_cloudinary
         from services.instagram import post_image_to_story
-        import logging
-        logger = logging.getLogger(__name__)
-
-        ai_prompt = generate_image_prompt(cfg.image_prompt)
-        image_path = generate_image(ai_prompt, cfg.negative_prompt)
-        public_image_url = upload_image_to_cloudinary(image_path)
+        db = SessionLocal()
         try:
+            cfg = db.query(BotSettings).first()
+            ai_prompt = generate_image_prompt(cfg.image_prompt)
+            image_path = generate_image(ai_prompt, cfg.negative_prompt)
+            public_image_url = upload_image_to_cloudinary(image_path)
             story_id = post_image_to_story(public_image_url)
             logger.info(f"[Manual Trigger] Image posted directly to Story! ID: {story_id}")
         except Exception as e:
             logger.error(f"[Manual Trigger] Story Image Error: {e}")
-            
-    background_tasks.add_task(_only_story_image, db, cfg)
+        finally:
+            db.close()
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
     return {"message": "AI Image -> Story generation started."}
 
 @router.get("/trigger/story/video")
-def trigger_story_video(background_tasks: BackgroundTasks):
+def trigger_story_video():
     """Instantly posts an AI Video ONLY to the Story (bypassing Feed completely)."""
-    def _only_story_video():
+    def _run():
         from services.json2video_service import create_reel_video
         from services.instagram import post_video_to_story
-        import logging
-        logger = logging.getLogger(__name__)
-
         video_url = create_reel_video()
         if video_url:
             try:
@@ -109,13 +128,14 @@ def trigger_story_video(background_tasks: BackgroundTasks):
                 logger.info(f"[Manual Trigger] Reel posted directly to Story! ID: {story_id}")
             except Exception as e:
                 logger.error(f"[Manual Trigger] Story Video Error: {e}")
-                
-    background_tasks.add_task(_only_story_video)
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
     return {"message": "AI Reel -> Story generation started."}
 
 @router.get("/trigger/comments")
-def trigger_comments(background_tasks: BackgroundTasks):
+def trigger_comments():
     """Instantly runs the AI Comment Responder."""
-    from services.scheduler import comment_reply_job
-    background_tasks.add_task(comment_reply_job)
-    return {"message": "AI Comment Pipeline task started."}
+    from services.comment_replier import run_comment_reply_pipeline
+    thread = threading.Thread(target=run_comment_reply_pipeline, kwargs={"force": True}, daemon=True)
+    thread.start()
+    return {"message": "AI Comment Reply pipeline started (runs in background)."}

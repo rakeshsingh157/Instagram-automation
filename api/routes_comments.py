@@ -10,8 +10,9 @@ Endpoints:
   GET    /api/v1/comments/stats     — Today's stats
 """
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+import threading
 from sqlalchemy import func
 from typing import List
 from datetime import datetime, timezone
@@ -148,8 +149,10 @@ def get_reply_stats(
 
 @router.post("/trigger")
 def trigger_comment_replies(
-    background_tasks: BackgroundTasks,
     _: bool = Depends(get_current_user),
 ):
-    background_tasks.add_task(run_comment_reply_pipeline, force=True)
+    thread = threading.Thread(
+        target=run_comment_reply_pipeline, kwargs={"force": True}, daemon=True
+    )
+    thread.start()
     return {"message": "Comment reply pipeline started in the background."}

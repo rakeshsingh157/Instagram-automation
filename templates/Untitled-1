@@ -1,0 +1,100 @@
+[Video automation](https://json2video.com/video-automation/)
+[Video API](https://json2video.com/video-api/)
+[Convert JSON to video](https://json2video.com/video-automation/json-to-video/)
+[AI Voices](https://json2video.com/ai-voices/)
+[JSON2Video](https://json2video.com/)
+- [Docs](https://json2video.com/docs/v2/)
+- [Learn](https://json2video.com/how-to/)
+- [Examples](https://json2video.com/examples/)
+- [Editor](https://json2video.com/tools/visual-editor/) 
+- [Pricing](https://json2video.com/pricing/)
+- [Affiliates](https://json2video.com/partners/)
+[Docs](https://json2video.com/docs/v2/)
+[Learn](https://json2video.com/how-to/)
+[Examples](https://json2video.com/examples/)
+[Editor](https://json2video.com/tools/visual-editor/)
+[Pricing](https://json2video.com/pricing/)
+[Affiliates](https://json2video.com/partners/)
+[Login / Sign up](https://json2video.com/dashboard/)
+[JSON2Video](https://json2video.com/)
+- [Video API](https://json2video.com/video-api/)
+- [Docs](https://json2video.com/docs/v2/)
+- [Learn](https://json2video.com/how-to/)
+- [Examples](https://json2video.com/examples/)
+- [Components](https://json2video.com/docs/resources/basic/)
+- [Pricing](https://json2video.com/pricing/)
+- [Affiliates](https://json2video.com/partners/)
+[Video API](https://json2video.com/video-api/)
+[Docs](https://json2video.com/docs/v2/)
+[Learn](https://json2video.com/how-to/)
+[Examples](https://json2video.com/examples/)
+[Components](https://json2video.com/docs/resources/basic/)
+[Pricing](https://json2video.com/pricing/)
+[Affiliates](https://json2video.com/partners/)
+[Get your API Key](https://json2video.com/get-api-key/)
+
+# JSON2Video API Tutorial
+
+Learn from all the examples
+
+#### [← Documentation](https://json2video.com/docs/)
+[← Documentation](https://json2video.com/docs/)
+
+#### API Tutorial
+- [Getting started](https://json2video.com/docs/tutorial/getting-started/)
+
+- [Types of elements](https://json2video.com/docs/tutorial/types-of-elements.html)
+
+- [Templates & variables](https://json2video.com/docs/tutorial/templates/)
+
+- [Asset generation with AI](https://json2video.com/docs/tutorial/ai-generation/)
+
+- [Exports](https://json2video.com/docs/tutorial/exports/)
+
+- [Using webhooks](https://json2video.com/docs/tutorial/webhooks/)
+
+- [Publishing to Youtube](https://json2video.com/docs/tutorial/exports/youtube/)
+
+- [API dashboard](https://json2video.com/docs/tutorial/dashboard/)
+
+- [FAQs](https://json2video.com/docs/tutorial/faqs/)
+
+[Getting started](https://json2video.com/docs/tutorial/getting-started/)
+[Types of elements](https://json2video.com/docs/tutorial/types-of-elements.html)
+[Templates & variables](https://json2video.com/docs/tutorial/templates/)
+[Asset generation with AI](https://json2video.com/docs/tutorial/ai-generation/)
+[Exports](https://json2video.com/docs/tutorial/exports/)
+[Using webhooks](https://json2video.com/docs/tutorial/webhooks/)
+[Publishing to Youtube](https://json2video.com/docs/tutorial/exports/youtube/)
+[API dashboard](https://json2video.com/docs/tutorial/dashboard/)
+[FAQs](https://json2video.com/docs/tutorial/faqs/)
+Welcome to the [JSON2Video tutorial](https://json2video.com/docs/tutorial/)!
+In this tutorial, you will learn how to use JSON2Video going through all the features, explanations and simple examples.
+Although it's not required, it's recommended to follow the suggested order.
+First thing you need is a JSON2Video user account and an API key:
+[Get your free API Key](https://json2video.com/get-api-key/)
+
+## What you will learn?
+
+You should start reading the [Getting started](https://json2video.com/docs/tutorial/getting-started/) section. There you will learn the basics of JSON2Video:
+- How to authenticate your calls to the API
+- What is a movie and its structure
+- What are the scenes and elements
+- How to position elements in the video
+- How the different elements overlay
+- How to use the cache to optimise the video rendering
+After getting started, you can go through all the types of elements JSON2Video offers to create your videos.
+- [Video elements](https://json2video.com/docs/tutorial/video-elements/)
+- [Image elements](https://json2video.com/docs/tutorial/image-elements/)
+- [Text elements](https://json2video.com/docs/tutorial/text-elements/)
+- [Component elements](https://json2video.com/docs/tutorial/component-elements/)
+- [HTML elements](https://json2video.com/docs/tutorial/html-elements/)
+- [Audio elements](https://json2video.com/docs/tutorial/audio-elements/)
+- [Voice elements](https://json2video.com/docs/tutorial/voice-elements/)
+[Video elements](https://json2video.com/docs/tutorial/video-elements/)
+[Image elements](https://json2video.com/docs/tutorial/image-elements/)
+[Text elements](https://json2video.com/docs/tutorial/text-elements/)
+[Component elements](https://json2video.com/docs/tutorial/component-elements/)
+[HTML elements](https://json2video.com/docs/tutorial/html-elements/)
+[Audio elements](https://json2video.com/docs/tutorial/audio-elements/)
+[Voice elements](https://json2video.com/docs/tutorial/voice-elements/)

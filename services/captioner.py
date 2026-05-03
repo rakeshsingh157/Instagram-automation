@@ -147,12 +147,14 @@ def generate_image_prompt(base_prompt: str = "") -> str:
 Rules:
 - Write ONE detailed image generation prompt for a stunning nature/landscape scene.
 - STRICT RULE: DO NOT INCLUDE ANY HUMANS, PEOPLE, OR MODELS. The scene must be 100% wilderness and nature.
+- STRICT RULE: The prompt MUST specify "no text, no letters, no words, no writing, no watermarks, no signs" — the generated image must contain ZERO text of any kind.
 - Include artistic style, lighting, mood, atmosphere, and quality keywords.
 - Keep it under 100 words.
 - Do NOT include negative prompt keywords.
 - Do NOT use quotes around the prompt.
 - Focus on: scenic beauty, dramatic lighting, professional landscape photography, 4K, high detail.
 - Ensure every prompt is distinct and introduces unique natural elements (e.g., specific flowers, rock formations, weather patterns).
+- NEVER include road signs, shop signs, billboards, neon text, carved text, or any written element in the scene description.
 - Output ONLY the prompt text, nothing else."""
 
     if not base_prompt:

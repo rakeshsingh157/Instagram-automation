@@ -1,0 +1,353 @@
+# ============================================================================
+# AI CONTEXT FILE — Instagram Automation Bot
+# ============================================================================
+# PURPOSE: Complete project map so AI assistants skip re-scanning every file.
+# LAST UPDATED: 2026-08-07
+# ============================================================================
+
+## PROJECT OVERVIEW
+- **Name**: Instagram Automation Bot
+- **Stack**: Python 3.11/3.12 · FastAPI · SQLAlchemy (MySQL via PyMySQL) · APScheduler
+- **Purpose**: Fully automated Instagram page management — AI-generated nature/landscape images & reels posted on schedule, AI-powered comment replies, AI-powered DM auto-replies via Meta Webhooks.
+- **Deployment**: Render.com (render.yaml blueprint), Procfile for Heroku-style.
+- **Entry Point**: `main.py` → uvicorn → FastAPI app
+- **Database**: MySQL (Aiven-hosted) with SSL via PyMySQL. Connection string in DATABASE_URL env var.
+- **AI Services Used**:
+  - **Hugging Face Inference API** (FLUX.1-schnell) — image generation
+  - **Pollinations AI** (free, text.pollinations.ai) — captions, hashtags, comment replies, DM replies, reel scripts, image prompt enhancement
+  - **JSON2Video API** — professional reel video rendering (template-based with AI images + voiceover + music)
+  - **Tesseract OCR** (pytesseract) — text detection in generated images (zero-tolerance: never post images with text)
+- **Image Hosting**: Cloudinary (primary), ImgBB (legacy/backup in storage.py)
+- **Instagram API**: Meta Graph API v19.0 — publishing images, reels, stories; fetching comments; posting replies; sending DMs
+
+## DIRECTORY STRUCTURE
+```
+Instagram-automation/
+├── main.py                         # FastAPI app init, routers, startup scheduler, global error handler
+├── requirements.txt                # Python dependencies (24 packages)
+├── .env.example                    # Template for all required env vars
+├── render.yaml                     # Render.com deployment blueprint
+├── Procfile                        # `web: uvicorn main:app --host 0.0.0.0 --port $PORT`
+├── runtime.txt                     # `python-3.11.8`
+├── run.sh                          # Local dev: venv + pip install + uvicorn --reload
+├── README_DEPLOY.md                # Render deployment guide
+├── api_trigger_docs.md             # Docs for unauthenticated GET trigger endpoints
+├── .gitignore                      # Comprehensive Python gitignore + project-specific
+│
+├── core/                           # Core infrastructure
+│   ├── config.py                   # Pydantic Settings (loads .env automatically)
+│   ├── database.py                 # SQLAlchemy engine, SessionLocal, Base, get_db()
+│   └── security.py                 # JWT auth (PyJWT + bcrypt), OAuth2 password flow
+│
+├── models/
+│   └── models.py                   # SQLAlchemy ORM models (6 tables)
+│
+├── schemas/
+│   └── schemas.py                  # Pydantic request/response schemas
+│
+├── api/                            # FastAPI route handlers
+│   ├── routes_admin.py             # HTML dashboard (Jinja2), login/logout, cookie auth
+│   ├── routes_auth.py              # POST /api/v1/auth/token — JWT login
+│   ├── routes_api.py               # Settings CRUD, post history, manual triggers
+│   ├── routes_comments.py          # Comment reply system CRUD + trigger
+│   └── routes_webhook.py           # Instagram DM webhook (Meta Messenger Platform)
+│
+├── services/                       # Business logic layer
+│   ├── ai_generator.py             # Image generation via HuggingFace FLUX.1-schnell
+│   ├── captioner.py                # AI caption + hashtag + image prompt generation
+│   ├── cloudinary_service.py       # Upload images/videos to Cloudinary CDN
+│   ├── comment_filter.py           # Spam/abuse detection, comment prioritization
+│   ├── comment_replier.py          # Full comment reply pipeline orchestration
+│   ├── dm_replier.py               # DM auto-reply with conversation history
+│   ├── image_validator.py          # Multi-pass Tesseract OCR text detection
+│   ├── instagram.py                # Meta Graph API: post images, reels, stories
+│   ├── json2video_service.py       # JSON2Video reel creation (template + AI scenes)
+│   ├── reply_generator.py          # AI reply generation for comments (Pollinations)
+│   ├── scheduler.py                # APScheduler: content posting + comment reply jobs
+│   ├── storage.py                  # ImgBB image upload (legacy, replaced by Cloudinary)
+│   └── video_maker.py              # MoviePy: image → static MP4 (legacy, replaced by JSON2Video)
+│
+└── templates/                      # Jinja2 HTML templates
+    ├── login.html                  # Admin login page
+    ├── dashboard.html              # Main admin dashboard (settings, history, triggers)
+    ├── visualizer.html             # Data visualizer page
+    ├── Untitled-1                   # Scratch/draft template (~5KB)
+    └── Untitled-2                   # Scratch/draft template (~31KB)
+```
+
+## ENVIRONMENT VARIABLES (from .env.example)
+```
+# API Keys
+HUGGINGFACE_API_KEY          — HuggingFace token for FLUX image generation
+IMGBB_API_KEY                — ImgBB image hosting (legacy, Cloudinary is primary)
+INSTAGRAM_PAGE_ID            — Instagram Business Account ID
+INSTAGRAM_ACCESS_TOKEN       — Meta Graph API permanent token
+
+# App Auth
+BOT_USERNAME                 — Admin dashboard username
+BOT_PASSWORD                 — Admin dashboard password
+SECRET_KEY                   — JWT signing key
+ALGORITHM=HS256              — JWT algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# Database (MySQL - Aiven)
+DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSL_MODE=REQUIRED
+DB_SSL_CA                    — PEM certificate content (multiline string)
+DATABASE_URL                 — Full connection URI: mysql://user:pass@host:port/db?ssl-mode=REQUIRED
+
+# AI Services
+SARVAM_AI_KEY                — Sarvam AI key (currently unused; Pollinations is the active free AI)
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+
+# JSON2Video
+JSON2VIDEO_API_KEY           — For reel video generation
+
+# Render-specific
+PUBLIC_URL                   — The deployed server URL
+PYTHON_VERSION=3.12.2        — Set in render.yaml
+```
+
+## DATABASE MODELS (models/models.py) — 6 Tables
+
+### 1. BotSettings
+- `id` (PK), `is_active` (bool), `image_prompt` (Text), `negative_prompt` (Text)
+- `run_interval_hours` (int, default=24), `story_automation` (bool, default=False)
+
+### 2. PostHistory
+- `id` (PK), `timestamp` (DateTime), `status` (str: "Success"/"Failed")
+- `post_type` (str: "image"/"reel"), `image_url`, `video_path`, `ig_post_id`, `caption`, `error_log`
+
+### 3. RepliedComment
+- `id` (PK), `comment_id` (unique, indexed), `post_id`, `comment_text`, `comment_username`
+- `reply_text`, `reply_id`, `status` ("replied"/"skipped"/"failed"), `replied_at` (DateTime)
+
+### 4. CommentReplySettings
+- `id` (PK), `is_active` (bool), `max_replies_per_day` (default=15)
+- `min_delay_seconds` (10), `max_delay_seconds` (30), `monitor_recent_posts` (5)
+- `reply_style` (Text, default="warm nature enthusiast...")
+
+### 5. CommentReplyLog
+- `id` (PK), `comment_id`, `post_id`, `action` (str: replied/skipped_spam/skipped_duplicate/etc.), `details`, `timestamp`
+
+### 6. DMChatHistory
+- `id` (PK), `sender_id` (indexed), `role` ("user"/"ai"), `message_text`, `timestamp`
+
+## PYDANTIC SCHEMAS (schemas/schemas.py)
+- Token, SettingsUpdate, SettingsResponse, PostHistoryResponse
+- CommentReplySettingsUpdate, CommentReplySettingsResponse
+- RepliedCommentResponse, CommentReplyLogResponse, CommentReplyStatsResponse
+
+## API ENDPOINTS
+
+### Auth — prefix: /api/v1/auth
+| Method | Path    | Auth | Description |
+|--------|---------|------|-------------|
+| POST   | /token  | No   | Login with BOT_USERNAME/BOT_PASSWORD → JWT token |
+
+### Admin Dashboard — no prefix (root)
+| Method | Path        | Auth   | Description |
+|--------|-------------|--------|-------------|
+| GET    | /login      | No     | Login HTML page |
+| POST   | /login      | No     | Form login → sets cookie |
+| GET    | /logout     | No     | Clears cookie, redirects to /login |
+| GET    | /           | Cookie | Main dashboard HTML |
+| GET    | /visualizer | Cookie | Data visualizer HTML |
+
+### API — prefix: /api/v1
+| Method | Path                    | Auth    | Description |
+|--------|-------------------------|---------|-------------|
+| GET    | /settings               | Bearer  | Get BotSettings |
+| PUT    | /settings               | Bearer  | Update BotSettings |
+| GET    | /history                | Bearer  | Get PostHistory (limit param) |
+| POST   | /trigger                | Bearer  | Run full bot pipeline in background |
+| GET    | /trigger/feed/image     | **None** | Post AI image to Feed (+story if on) |
+| GET    | /trigger/feed/video     | **None** | Post AI reel to Feed |
+| GET    | /trigger/story/image    | **None** | Post AI image to Story only |
+| GET    | /trigger/story/video    | **None** | Post AI reel to Story only |
+| GET    | /trigger/comments       | **None** | Run comment reply pipeline |
+
+### Comments — prefix: /api/v1/comments
+| Method | Path      | Auth   | Description |
+|--------|-----------|--------|-------------|
+| GET    | /settings | Bearer | Get CommentReplySettings |
+| PUT    | /settings | Bearer | Update CommentReplySettings |
+| GET    | /history  | Bearer | Replied comments history |
+| GET    | /logs     | Bearer | Action logs |
+| GET    | /stats    | Bearer | Today's reply stats |
+| POST   | /trigger  | Bearer | Manual comment reply trigger |
+
+### Webhook — prefix: /api/v1
+| Method | Path     | Auth | Description |
+|--------|----------|------|-------------|
+| GET    | /webhook | None | Meta webhook verification (hub.mode/verify_token/challenge) |
+| POST   | /webhook | None | Receive incoming DM events from Instagram |
+
+## SERVICE LAYER DETAILS
+
+### ai_generator.py
+- `API_URL`: HuggingFace FLUX.1-schnell endpoint
+- `MAX_REGENERATION_ATTEMPTS = 10`
+- `_generate_single_image(prompt, negative_prompt)` → filepath
+- `_build_no_text_prompt(base_prompt)` → enhanced prompt with anti-text instructions
+- `generate_image(prompt, negative_prompt)` → filepath (main entry point, includes OCR loop)
+  - Zero-tolerance: loops up to 10 times regenerating if text detected
+  - Falls back to raw prompt on AI refusal detection
+
+### captioner.py
+- Uses **Pollinations AI** (text.pollinations.ai) — free, no API key needed
+- `_call_ai(system_prompt, user_prompt)` → str (helper with 3 retries, 5s backoff)
+- `generate_caption()` → full caption with hashtags (format: caption + dots + 20 hashtags)
+- `_generate_hashtags(theme)` → 20 hashtags string
+- `generate_image_prompt(base_prompt)` → enhanced SD/FLUX prompt
+- Fallback pools: HASHTAG_POOL (28 hashtags), FALLBACK_CAPTIONS (7 templates)
+- Random theme selection from 15 nature themes
+
+### cloudinary_service.py
+- Cloudinary config from settings at module level
+- `upload_video_to_cloudinary(file_path)` → public URL
+- `upload_image_to_cloudinary(file_path)` → public URL
+- Both use folder="instagram_bot", unique_filename=True
+
+### comment_filter.py
+- `SPAM_PATTERNS`: 20 regex patterns (follow me, f4f, links, promo, etc.)
+- `ABUSE_KEYWORDS`: 20 offensive words
+- `POSITIVE_KEYWORDS`: 28 positive engagement words
+- `EMOJI_ONLY_PATTERN`: regex for emoji-only comments
+- `FilterResult` dataclass: should_reply (bool), reason (str), priority (int 0-3)
+- `filter_comment(comment_text, own_username)` → FilterResult
+  - Priority 0: Skip (spam, abuse, emoji-only, <2 words)
+  - Priority 1: Questions (contains "?")
+  - Priority 2: Positive/compliment
+  - Priority 3: General valid comment
+
+### comment_replier.py
+- `GRAPH_API_BASE = "https://graph.facebook.com/v19.0"`
+- Instagram API helpers: `fetch_recent_posts(limit)`, `fetch_comments(media_id, limit)`, `post_reply_to_instagram(comment_id, reply_text)`
+- DB helpers: `is_already_replied()`, `has_bot_reply_in_api()`, `get_replies_today_count()`, `log_action()`, `get_or_create_settings()`
+- `run_comment_reply_pipeline(force=False)` — main orchestrator:
+  1. Check active + daily limit
+  2. Fetch posts → comments
+  3. Filter (duplicates DB+API, spam, abuse, short)
+  4. Sort by priority, random select up to remaining quota
+  5. Generate AI replies, post with retries (2 max), random delays (10-30s)
+  6. Log everything, handle IntegrityError for race conditions
+
+### dm_replier.py
+- Uses **Pollinations AI** (free) for DM replies
+- `get_instagram_username(sender_id)` → username from Graph API
+- `_chat_with_free_ai(messages_list)` → raw text reply
+- `generate_dm_reply(sender_id, new_message)` → cleaned reply (max 980 chars for IG DM limit)
+  - Loads last 20 messages from DMChatHistory for context
+  - Adjusts system prompt for ongoing vs new conversations
+  - Persona: "Nature Vibes" page, casual DM style
+- `send_dm_reply(recipient_id, message_text)` → posts via Graph API /me/messages
+- `handle_incoming_dm(sender_id, message_text)` → full pipeline:
+  1. Save user msg to DB → 2. Generate AI reply → 3. Save AI reply to DB → 4. Send via API
+
+### image_validator.py
+- Multi-pass OCR using Tesseract with 6 image preprocessing variants:
+  original, grayscale, high-contrast, inverted, sharpened, binarized
+- `_MIN_CONFIDENCE = 30`, `_MIN_TEXT_LENGTH = 2`
+- `_scan_for_text(image, label)` → list of detected words with confidence
+- `_create_preprocessed_variants(image)` → 6 PIL Image variants
+- `_AI_REFUSAL_PATTERNS`: 15 patterns for AI error/refusal text detection
+- `is_ai_refusal(detected_text)` → bool (2+ keyword matches = refusal)
+- `has_text_in_image(image_path)` → (has_text: bool, detected_text: str, is_refusal: bool)
+
+### instagram.py
+- All use Graph API v19.0, require INSTAGRAM_PAGE_ID + INSTAGRAM_ACCESS_TOKEN
+- `post_image_to_instagram(image_url, caption)` → media_id (container → 3s wait → publish)
+- `post_reels_to_instagram(video_url, caption)` → media_id (container → poll status 10x10s → publish)
+- `post_video_to_story(video_url)` → media_id (STORIES type, poll 10x10s)
+- `post_image_to_story(image_url)` → media_id (STORIES type, 3s wait)
+
+### json2video_service.py
+- `JSON2VIDEO_URL = "https://api.json2video.com/v2/movies"`
+- `TEMPLATE_ID = "fOnm0pvJFwKBtwgcCDTk"`
+- `MUSIC_URLS`: 2 inspirational background music tracks
+- `_generate_reel_scenes()` → dict with title + 4 scenes (voiceover_text + image_prompt)
+  - AI-generated via Pollinations, fallback hardcoded nature script
+- `create_reel_video()` → public video URL or None
+  - Submits render job → polls for completion (15s intervals, 10min timeout)
+- Template variables: voice_model=azure, voice_name=en-US-Jenny, image_model=flux-schnell, subtitles Montserrat
+
+### reply_generator.py
+- Uses **Pollinations AI** for comment replies
+- `TONE_VARIANTS`: 6 tone variations for prompt diversity
+- `FALLBACK_REPLIES`: dict with "question" (5), "positive" (8), "general" (8) templates
+- `_clean_ai_reply(raw_text)` → cleaned reply (removes quotes, prefixes, hashtags, @mentions, limits 2 sentences, caps 200 chars)
+- `generate_ai_reply(comment_text, post_caption, reply_style, priority)` → reply text
+  - 3 retries with 5s backoff on rate limit
+  - Falls back to template replies on any failure
+
+### scheduler.py
+- Uses APScheduler BackgroundScheduler
+- `_should_post_reel(db)` → bool (True if last reel was 7+ days ago or never)
+- `bot_pipeline_job(force=False)` — main posting job:
+  - If reel is due → _post_reel_pipeline (weekly)
+  - Otherwise → _post_image_pipeline (daily)
+- `_post_image_pipeline(db, cfg)`: prompt enhancement → generate image → caption → Cloudinary upload → post to Feed (+Story if on)
+- `_post_reel_pipeline(db)`: JSON2Video render → caption → post Reel to Feed (+Story if on)
+- `comment_reply_job()`: wrapper for run_comment_reply_pipeline
+- `start_scheduler()`: main job every N hours (from config), comment replies every 3 hours
+- `update_scheduler_interval(hours)`: reschedules main job at runtime
+
+### storage.py (Legacy)
+- `upload_to_imgbb(image_path)` → public URL (base64 upload to ImgBB API)
+- Superseded by cloudinary_service.py for image hosting
+
+### video_maker.py (Legacy)
+- `create_video_from_image(image_path, duration=5)` → MP4 path (MoviePy ImageClip)
+- Superseded by json2video_service.py for reel generation
+
+## SECURITY & AUTH
+- Single static admin user via BOT_USERNAME/BOT_PASSWORD env vars
+- JWT tokens signed with SECRET_KEY (HS256), 24h expiry
+- Cookie-based auth for dashboard (httponly=False for JS access)
+- Bearer token auth for API endpoints via OAuth2PasswordBearer
+- `get_current_user()` checks cookie first, falls back to Authorization header
+- **Unauthenticated trigger endpoints**: /trigger/feed/image, /feed/video, /story/image, /story/video, /trigger/comments — designed for cron jobs / iOS Shortcuts / Make.com
+
+## WEBHOOK (DM AUTO-REPLY) GUARDS
+1. Skip echo messages (is_echo=True) — messages sent BY the bot
+2. Skip if sender_id == INSTAGRAM_PAGE_ID — bot's own messages
+3. Skip non-text messages (images/stickers)
+4. Skip duplicate message IDs (OrderedDict cache, 500 entries max)
+5. Per-sender 5-second cooldown to prevent rapid-fire loops
+- Verify token: `instagram_nature_bot_2026`
+
+## SCHEDULING STRATEGY
+- **Content posting**: Configurable interval (default 24h), runs image pipeline daily, reel pipeline weekly
+- **Comment replies**: Every 3 hours, respects daily limit (default 15/day), random delays between replies (10-30s)
+- Both jobs start on app startup via `start_scheduler()`
+
+## IMPORTANT PATTERNS & CONVENTIONS
+- All background work uses `threading.Thread(daemon=True)` for non-blocking triggers
+- Database sessions created per-request via `get_db()` dependency or `SessionLocal()` in services
+- Services always close DB sessions in `finally` blocks
+- Logging via Python `logging` module throughout
+- Generated content stored in `generated_content/` directory (gitignored)
+- Static files served at `/static` from `generated_content/`
+- SSL cert for MySQL written to `ca.pem` at runtime from DB_SSL_CA env var
+- All IG Graph API calls use v19.0
+- Pollinations AI endpoint: `https://text.pollinations.ai/` (POST, returns raw text not JSON)
+- Image generation uses random seeds for variety
+
+## DEPENDENCIES (requirements.txt)
+fastapi>=0.111.0, uvicorn[standard]>=0.30.0, starlette>=0.37.0
+pydantic>=2.7.0, pydantic-settings>=2.2.0, python-multipart==0.0.9
+SQLAlchemy>=2.0.31, Jinja2==3.1.3, APScheduler==3.10.4, pytz==2024.1
+moviepy==1.0.3, requests==2.31.0, PyJWT==2.8.0
+passlib[bcrypt]==1.7.4, bcrypt==4.1.2, python-dotenv==1.0.1
+huggingface_hub==0.20.3, python-dateutil==2.8.2, Pillow==10.4.0
+PyMySQL==1.1.0, cryptography==42.0.2, cloudinary==1.38.0, pytesseract==0.3.10
+
+## RENDER DEPLOYMENT
+- Build: `apt-get install tesseract-ocr && pip install -r requirements.txt`
+- Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Keep-alive: ping `/ping` every 10min via cron-job.org (free tier)
+- Live URL example: https://instagram-automation-g7b4.onrender.com
